@@ -1,6 +1,7 @@
 fx_version 'cerulean'
 game 'gta5'
 
+author 'Milan'
 description 'Speler Fouilleren Script'
 version '1.0.0'
 
@@ -20,4 +21,5 @@ dependencies {
     'ox_lib',
     'ox_target',
     'ox_inventory'
+
 }
