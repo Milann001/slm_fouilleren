@@ -1,3 +1,6 @@
+local isSearching = false
+local searchTarget = nil
+
 local function snapToBehindTarget(targetPed)
     local playerPed = cache.ped or PlayerPedId()
     local coords = GetOffsetFromEntityInWorldCoords(targetPed, 0.0, -0.9, 0.0)
@@ -6,6 +9,7 @@ local function snapToBehindTarget(targetPed)
     SetEntityHeading(playerPed, heading)
 end
 
+-- TARGET OPTIE
 exports.ox_target:addGlobalPlayer({
     {
         label = 'Fouilleren',
@@ -21,6 +25,14 @@ exports.ox_target:addGlobalPlayer({
     }
 })
 
+-- EVENT: Gevangen dat de inventory sluit (ESC of kruisje)
+RegisterNetEvent('ox_inventory:closed', function()
+    -- Zodra de inventory sluit, zetten we de zoek-status direct uit
+    isSearching = false
+    searchTarget = nil
+end)
+
+-- EVENT: Verzoek ontvangen
 RegisterNetEvent('fouilleer:receiveRequest', function(searcherId)
     local alert = lib.alertDialog({
         header = 'Fouilleer Verzoek',
@@ -40,6 +52,7 @@ RegisterNetEvent('fouilleer:receiveRequest', function(searcherId)
     end
 end)
 
+-- EVENT: Starten met zoeken
 RegisterNetEvent('fouilleer:startSearching', function(targetId)
     local targetPlayer = GetPlayerFromServerId(targetId)
     
@@ -50,10 +63,8 @@ RegisterNetEvent('fouilleer:startSearching', function(targetId)
 
     local targetPed = GetPlayerPed(targetPlayer)
     
-    -- Positie correctie
     snapToBehindTarget(targetPed)
 
-    -- Animatie en Progressbar
     if lib.progressBar({
         duration = 5000,
         label = 'Persoon fouilleren...',
@@ -70,35 +81,45 @@ RegisterNetEvent('fouilleer:startSearching', function(targetId)
             clip = 'player_search'
         },
     }) then 
-        -- Open de inventory via server
+        isSearching = true
+        searchTarget = targetId
+        
         TriggerServerEvent('fouilleer:openInventory', targetId)
 
-        -- NIEUW: Start een loop om de afstand in de gaten te houden
+        -- START MONITOR LOOP
         Citizen.CreateThread(function()
-            -- We slaan het ped ID van het doelwit op om te checken
-            local searchTargetPed = GetPlayerPed(GetPlayerFromServerId(targetId))
+            local monitorTargetPed = GetPlayerPed(GetPlayerFromServerId(targetId))
             
-            while true do
-                -- Check elke 500ms (halve seconde)
-                Wait(500) 
+            while isSearching do
+                -- Check elke 200ms (sneller dan voorheen voor betere respons)
+                Wait(200) 
 
-                local playerPed = PlayerPedId()
-                local coords = GetEntityCoords(playerPed)
-                local targetCoords = GetEntityCoords(searchTargetPed)
-                local dist = #(coords - targetCoords)
-
-                -- 1. Check of de andere speler nog bestaat (niet uitgelogd)
-                -- 2. Check of de afstand groter is dan 2.5 meter
-                if not DoesEntityExist(searchTargetPed) or dist > 2.5 then
-                    -- Sluit de inventory geforceerd
-                    exports.ox_inventory:closeInventory()
-                    lib.notify({type = 'error', description = 'Inventory gesloten! Afstand met speler is te groot.'})
-                    break -- Stop de loop
+                -- CHECK 1: Is de inventory handmatig gesloten via ox_inventory statebag?
+                -- LocalPlayer.state.invOpen is false als je op ESC hebt gedrukt.
+                if not LocalPlayer.state.invOpen then
+                    isSearching = false
+                    break -- Stop loop direct, GEEN melding geven
                 end
 
-                -- (Optioneel) Als je zelf op ESC drukt en de inventory sluit,
-                -- blijft deze loop nog even draaien tot je wegloopt.
-                -- Dit is de veiligste methode zonder complexe inventory-events te gebruiken.
+                -- CHECK 2: Dubbele check op onze eigen variabele
+                if not isSearching then break end
+
+                -- AFSTAND CHECK
+                local playerPed = PlayerPedId()
+                local coords = GetEntityCoords(playerPed)
+                local targetCoords = GetEntityCoords(monitorTargetPed)
+                local dist = #(coords - targetCoords)
+
+                -- Als speler niet meer bestaat OF te ver weg is
+                if not DoesEntityExist(monitorTargetPed) or dist > 2.5 then
+                    
+                    -- Hier sluiten we hem geforceerd, DUS hier geven we wel een melding
+                    isSearching = false
+                    exports.ox_inventory:closeInventory()
+
+                    lib.notify({type = 'error', description = 'Verbinding verbroken: Afstand te groot.'})
+                    break 
+                end
             end
         end)
     else 
