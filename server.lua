@@ -5,8 +5,7 @@ RegisterNetEvent('fouilleer:requestSearch', function(targetId)
 end)
 
 RegisterNetEvent('fouilleer:acceptSearch', function(searcherId)
-    local source = source -- De speler die gefouilleerd wordt
-    -- Stuur signaal naar fouilleerder om animatie te starten
+    local source = source
     TriggerClientEvent('fouilleer:startSearching', searcherId, source)
 end)
 
@@ -14,11 +13,8 @@ RegisterNetEvent('fouilleer:denySearch', function(searcherId)
     TriggerClientEvent('fouilleer:notifyDenial', searcherId)
 end)
 
--- NIEUW: Dit event opent de inventory daadwerkelijk
 RegisterNetEvent('fouilleer:openInventory', function(targetId)
     local source = source
-    
-    -- We gebruiken forceOpenInventory server-side.
-    -- Dit negeert de standaard checks en dwingt de inventory open voor de speler.
+    -- forceOpenInventory is nodig om beveiliging te omzeilen
     exports.ox_inventory:forceOpenInventory(source, 'player', targetId)
 end)
